@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import os
 import dimod
+import matplotlib.pyplot as plt
 
 # Local imports
 import sys
@@ -23,6 +24,8 @@ from hybrid.core import State
 from dwave.system import LeapHybridSampler
 import dwave.inspector
 from dwave.system import DWaveSampler, EmbeddingComposite
+from dwave.system import LeapHybridBQMSampler
+from dwave.preprocessing import FixVariablesComposite
 
 
 P = 2 # power plants
@@ -798,11 +801,38 @@ def main():
         bqm_binary = dimod.as_bqm(qubo.objective.linear.to_array(), qubo.objective.quadratic.to_array(), dimod.BINARY)
         #sampler = SimulatedAnnealingSubproblemSampler(num_reads=10)
 
-        #sampler = LeapHybridSampler()
-        #sampler = DWaveSampler(solver=dict(topology__type='pegasus'))
-        sampler = EmbeddingComposite(DWaveSampler())
 
+        coefficients_df=pd.DataFrame()
+        for tmpPenalty in [None,0,1e6,1e9]:
+            tmpQubo, tmpNum_vars, tmpHamiltonian, tmp_Offset = _qubo_converter(mip, penalty=tmpPenalty)
+            print(tmpPenalty)
+            coefficients=(tmpQubo.objective._quadratic.to_array()).flatten()
+            coefficients=np.append(coefficients,tmpQubo.objective._linear.to_array())
+            coefficients_df_tmp=pd.DataFrame({'coefficient':coefficients})
+            coefficients_df_tmp["Penalty"]=tmpPenalty
+            coefficients_df=pd.append(coefficients_df,coefficients_df_tmp)
+
+
+        
+
+        fig, ax = plt.subplots(figsize=(8, 4))
+        n_bins=1000000
+        n, bins, patches = ax.hist(coefficients_df.coefficient, n_bins, density=True, histtype='step', cumulative=True, label='Empirical')
+
+        plt.savefig("hist.png")
+
+        coefficients_df.hist()
+
+
+        #sampler = LeapHybridSampler()
+        sampler = DWaveSampler(solver=dict(topology__type='pegasus'))
+        sampler = EmbeddingComposite(DWaveSampler())
+        #sampler = LeapHybridBQMSampler()
         sampleset = sampler.sample(bqm_binary, label='Example - CM')
+        sampler_fixed = FixVariablesComposite(sampler)
+        sampleset = sampler_fixed.sample(bqm_binary, fixed_variables={bqm_binary.variables[0]: 1}, num_reads=1000)
+        #sampleset = sampler_fixed.sample(bqm_binary, fixed_variables={bqm_binary.variables[0]: 1})
+
 
         result_dwave = sampleset.first.sample
 
