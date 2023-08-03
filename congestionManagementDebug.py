@@ -4,8 +4,14 @@ import numpy as np
 import pandas as pd
 import os
 import dimod
-import matplotlib.pyplot as plt
-import neal
+from docplex.mp.model_reader import ModelReader
+import copy
+from dwave.system import LeapHybridSampler
+from dwave.system import DWaveSampler, EmbeddingComposite
+import dwave.inspector
+
+
+
 
 # Local imports
 import sys
@@ -22,11 +28,6 @@ from qiskit_optimization.algorithms import GurobiOptimizer
 
 from hybrid.samplers import SimulatedAnnealingSubproblemSampler
 from hybrid.core import State
-from dwave.system import LeapHybridSampler
-import dwave.inspector
-from dwave.system import DWaveSampler, EmbeddingComposite
-from dwave.system import LeapHybridBQMSampler
-from dwave.preprocessing import FixVariablesComposite
 
 
 P = 2 # power plants
@@ -63,24 +64,6 @@ T_OFF = 1
 SOLVER = "SimulatedAnnealingSolver"
 TUNING = False
 
-
-def printModelCoefficients(file_path,model):    
-    with open(file_path, 'w') as file:
-        # Iterate over the variables
-        for var in model.variables:
-            var_name = var.name
-            var_coeff = model.get_linear_coefficients(var)
-            file.write(f'{var_name}: {var_coeff}\n')
-
-        # Iterate over the quadratic terms
-        for i in range(model.get_num_vars()):
-            for j in range(i + 1, model.get_num_vars()):
-                var1 = model.get_variable(i)
-                var2 = model.get_variable(j)
-                coeff = model.get_quadratic_coefficients(var1, var2)
-                file.write(f'{var1.name} * {var2.name}: {coeff}\n')
-
-    print(f'Coefficients written to {file_path}')
 
 def _create_mip_objective(p, t, tran, i, j, cp_coef, cs_coef, cd_coef, v_p, v_s, p_0_t):
     """
@@ -782,99 +765,112 @@ def main():
                                   I_B, V_P, V_S, T, P, TRAN, I, J)
         mip = _mip_const_producers_change(mip, P_MIN, P_MAX, V_P, P, T, I)
         mip = _mip_const_producers_time(mip, T_OFF, T_ON, T, P, I)
-        print(mip.export_as_lp_string(),'\n')
+        
 
-        f = open("MILP_Model.lp", "w")
-        f.write(mip.export_as_lp_string())
-        f.close()
+        qubo, num_vars, hamiltonian, offset = _qubo_converter(mip, penalty=0)
 
-        #printModelCoefficients("MILP_Coefficients.txt",mip)
-    
-        qubo, num_vars, hamiltonian, offset = _qubo_converter(mip, penalty=None)
+        #print(qubo)
 
-        print(qubo)
-        f = open("QUBO_Model.lp", "w")
-        f.write(qubo.export_as_lp_string())
-        f.close()
-
-        #printModelCoefficients("QUBO_Coefficients.txt",qubo)
-    
         #bqm_binary = dimod.as_bqm(qubo.objective.linear.to_array(), qubo.objective.quadratic.to_array(), dimod.BINARY)
-        #sampler = SimulatedAnnealingSubproblemSampler(num_reads=10)
-        bqm_binary=dimod.lp.load("MILP_Model.lp")
-        bqm_binary.change_vartype(vartype=dimod.SPIN,inplace=True)
+
+        bqm_binary_raw = dimod.lp.load('model.lp')
+        #bqm_binary = bqm_binary.change_vartype(vartype='BINARY', inplace=False)
+
+        lagrangeMultipliers=[0,1e3,1e6,1e9,1e12,1e20]
+
+        solverResults={}
+
+        for lagrangeMultiplier in lagrangeMultipliers:
+
+            print("Testing Lagrange Multiplier {}".format(lagrangeMultiplier))
+
+            constraints_str=copy.deepcopy(bqm_binary_raw.constraint_labels)
+            #Remove all constraints but one, to see which one is not being used by dimod
+            for constraintTmp in constraints_str:                      
+                print(constraintTmp)          
+                bqm_binary_raw_copy=copy.deepcopy(bqm_binary_raw)
+                for constraintTmpTmp in constraints_str:
+                    if (constraintTmpTmp!=constraintTmp):
+                        a=1 #Dummy
+                        #bqm_binary_raw_copy.remove_constraint(constraintTmpTmp)
+               
+                #bqm_binary_tmp=dimod.cqm_to_bqm(bqm_binary_raw_copy)
 
 
-        coefficients_df=pd.DataFrame()
-        penalties=[None,0,1e6,1e9]
-        penalties=[None]
-        for tmpPenalty in penalties:
-            tmpQubo, tmpNum_vars, tmpHamiltonian, tmp_Offset = _qubo_converter(mip, penalty=tmpPenalty)
-            print(tmpPenalty)
-            coefficients=(tmpQubo.objective._quadratic.to_array()).flatten()
-            coefficients=np.append(coefficients,tmpQubo.objective._linear.to_array())
-            coefficients_df_tmp=pd.DataFrame({'coefficient':coefficients})
-            coefficients_df_tmp["Penalty"]=tmpPenalty
-            coefficients_df=pd.concat([coefficients_df,coefficients_df_tmp])
+                bqm_binary=dimod.cqm_to_bqm(bqm_binary_raw_copy,lagrange_multiplier=lagrangeMultiplier)
+                #bqm_binary = dimod.as_bqm(bqm_binary_raw.objective.linear, bqm_binary_raw.objective.quadratic, dimod.BINARY)
+                #print(bqm_binary)
+                #sampler = SimulatedAnnealingSubproblemSampler(num_reads=10)
 
+                #sampler = LeapHybridSampler()
+                sampler = EmbeddingComposite(DWaveSampler(solver=dict(qpu=True)))
+                
+                #sampler = dimod.ExactSolver()
 
-        
+                #sampleset = sampler.sample(bqm_binary[0], label='Example - CM - Lagrance: {}'.format(lagrangeMultiplier),time_limit=10)
+                sampleset = sampler.sample(bqm_binary[0], label='Example - CM - Lagrance: {}'.format(lagrangeMultiplier),chain_strength=1e15)
+                
+                
 
-        fig, ax = plt.subplots(figsize=(8, 4))
-        n_bins=1000000
-        n, bins, patches = ax.hist(coefficients_df.coefficient, n_bins, density=True, histtype='step', cumulative=True, label=coefficients_df.Penalty)
+                dwave.inspector.show(sampleset)
 
-        plt.savefig("hist.png")
-        coefficients_df.to_csv("Coefficients.csv",sep=";",decimal=",")
-
-        coefficients_df.hist()
-
-
-        #sampler = LeapHybridSampler()
-        #sampler = DWaveSampler(solver=dict(topology__type='pegasus'))
-        #sampler = EmbeddingComposite(DWaveSampler())
-        #sampler = LeapHybridBQMSampler()
-        sampler=neal.SimulatedAnnealingSampler()
-        sampleset = sampler.sample(bqm_binary, label='Example - CM')
-        sampler_fixed = FixVariablesComposite(sampler)
-        sampleset = sampler_fixed.sample(bqm_binary, fixed_variables={bqm_binary.variables[0]: 1}, num_reads=1000)
-        #sampleset = sampler_fixed.sample(bqm_binary, fixed_variables={bqm_binary.variables[0]: 1})
-
-
-        result_dwave = sampleset.first.sample
-
-        #dwave.inspector.show(sampleset)   # doctest: +SKIP
-
-        stop = time.time()
-
-        class C:
-            pass
-        result=C()
-
-        setattr(result,"variables_dict",{})
-        
-
-        for idx, var in enumerate(qubo.variables_index):
-            result.variables_dict[var]=result_dwave[idx]
-
-
-        #result = sampler.sample(bqm_binary, label="example_qp", num_reads=1024)
+                print(sampleset.info)
 
         
 
-        print(result)
-  
-        feasible = _check_result_(lst_vars, mip, result)
+                #from dwave.system import DWaveSampler, EmbeddingComposite
+                #qpu = DWaveSampler()
+                #sampleset = EmbeddingComposite(qpu).sample(bqm_binary[0],
+                #                                     return_embedding=True,
+                #                                     answer_mode="raw",
+                #                                     num_reads=2500,
+                #                                     annealing_time=1)
+
+                result_dwave = sampleset.first.sample
+                result_dwave=bqm_binary[1](result_dwave) #Retranslate back to variables in original BCM
+
+
+                stop = time.time()
+
+                class C:
+                    pass
+                result=C()
+
+                setattr(result,"variables_dict",{})
+                
+
+                for idx, var in enumerate(bqm_binary_raw.variables):
+                    result.variables_dict[var]=result_dwave[var]
+
+
+                #result = sampler.sample(bqm_binary, label="example_qp", num_reads=1024)
+
+                
+
+                print(result)
+        
+                feasible = _check_result_(lst_vars, mip, result)
+
+                solverResults[lagrangeMultiplier]={"result":result,"feasible":feasible}
+        
+                final_time = stop - start
+                #eigenvalue = result.fval
+                solution = result.variables_dict
+                execution_time = final_time
+                parameters = None
+                backend = 'Gurobi'
+            
+                _print_solution(solution, V_P, V_S)
     
-        final_time = stop - start
-        #eigenvalue = result.fval
-        solution = result.variables_dict
-        execution_time = final_time
-        parameters = None
-        backend = 'Gurobi'
+        _write_csv(P, TRAN, T, BRANCH, I, J, CP_COEF, CS_COEF, CDIFF_COEF, V_P, V_S,
+                      P_0_T, P_0_P_T, P_MIN, P_MAX, S_MIN, S_MAX, S_0_TRAN_T, I_0, I_B,
+                      S_P_B, S_TRAN_B, T_ON, T_OFF, backend, feasible, final_time,
+                      execution_time, 
+                      #eigenvalue,
+                       num_vars, parameters,
+                      solution, path='.')
     
-        _print_solution(solution, V_P, V_S)
-    
+        print('\nThe algorithm with', num_vars, 'variables runs in (s):', final_time,'\n\n')
 
 if __name__ == '__main__':
     
