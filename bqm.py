@@ -29,4 +29,9 @@ from dwave.system import LeapHybridBQMSampler
 from dwave.preprocessing import FixVariablesComposite
 
 milp_binary=dimod.lp.load("MILP_Model.lp")
-milp_binary.change_vartype(vartype=dimod.SPIN,inplace=True)
+#milp_binary.change_vartype(vartype=dimod.SPIN,inplace=True)
+
+sampler=neal.SimulatedAnnealingSampler()
+sampleset = sampler.sample(milp_binary, label='Example - CM')
+sampler_fixed = FixVariablesComposite(sampler)
+sampleset = sampler_fixed.sample(bqm_binary, fixed_variables={bqm_binary.variables[0]: 1}, num_reads=1000)
