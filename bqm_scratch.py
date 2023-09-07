@@ -7,6 +7,7 @@ import pandas as pd
 from copy import deepcopy
 import json
 import datetime
+from dwave.preprocessing import FixVariablesComposite
 
 from qiskit_optimization.algorithms import GurobiOptimizer
 
@@ -138,7 +139,7 @@ print(cqm)
 
 
 sampler=neal.SimulatedAnnealingSampler()
-sampleset = sampler.sample(bqm, label='Example - CM - Scratch bqm')
+sampleset = sampler.sample(bqm, label='Example - CM - Scratch bqm',num_reads=10000)
 
 print(sampleset.first)
 solution=sampleset.first
@@ -155,21 +156,28 @@ print(cqm.check_feasible(solution.sample))
 solutions={}
 
 combinations = []
+combinations.append([]) #Add the empty list, for having the original problem
 for r in range(1, len(cqm.constraint_labels) + 1):
     combinations.extend(list(itertools.combinations(cqm.constraint_labels, r)))
 
+
+
 # Print the combinations
 for combo in combinations:
-      print(combo)
       cqm_simple=deepcopy(cqm)
       for constraint in combo:
             cqm_simple.remove_constraint(constraint)
       experimentLabel=", ".join(combo)
+      bqm, invert = dimod.cqm_to_bqm(cqm)
       sampleset = sampler.sample(bqm, label='Example - CM - Scratch bqm '+experimentLabel)
       solution=sampleset.first
+      feasible=cqm_simple.check_feasible(solution.sample)      
+      solutions[experimentLabel]={"solution":solution.sample,"energy":solution.energy,"feasible":feasible,"fixed":False}
+      sampleset = sampler.sample(bqm, label='Example - CM - Scratch bqm FIXED'+experimentLabel)
+      sampler_fixed = FixVariablesComposite(sampler)
+      solution=sampleset.first
       feasible=cqm_simple.check_feasible(solution.sample)
-      print(cqm_simple.check_feasible(solution.sample))
-      solutions[experimentLabel]={"solution":solution.sample,"energy":solution.energy,"feasible":feasible}
+      solutions[experimentLabel+" fixed"]={"solution":solution.sample,"energy":solution.energy,"feasible":feasible,"fixed":True}
 
 current_datetime = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 # Create the filename with the prefix
