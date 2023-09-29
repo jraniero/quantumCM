@@ -9,12 +9,6 @@ import json
 import datetime
 from dwave.preprocessing import FixVariablesComposite
 import dwave.inspector
-from dwave.system import DWaveSampler, EmbeddingComposite
-
-
-
-
-from hybrid.reference.kerberos import KerberosSampler
 
 from qiskit_optimization.algorithms import GurobiOptimizer
 
@@ -23,40 +17,6 @@ def convert_to_serializable(obj):
         return int(obj)  # Convert int8 to int
     else:
         raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-
-
-def solveBQM(cqm,inspect=False,num_reads=1000,annealing_time=40):
-      bqm, invert = dimod.cqm_to_bqm(cqm)
-      #print(cqm)
-      qpu = DWaveSampler()
-      samplesetQPU = EmbeddingComposite(qpu).sample(bqm,
-                                          return_embedding=True,
-                                          answer_mode="raw",
-                                          num_reads=num_reads,
-                                          annealing_time=annealing_time,
-                                          auto_scale=True #Failing if set to false
-                                          #,chain_strength=1e30
-                                          ) 
-
-                                          
-
-      print("QPU annealer:")
-      solution=samplesetQPU.first
-      print(solution)
-      print("Is feasible:")
-      print(cqm.check_feasible(solution.sample))                          
-      if inspect:
-            dwave.inspector.show(samplesetQPU)
-
-      sampler=neal.SimulatedAnnealingSampler()
-      sampleset = sampler.sample(bqm, label='Example - CM - Scratch bqm',num_reads=10000)
-
-      solution=sampleset.first
-
-      print("Simulated annealer:")
-      print(solution)
-      print("Is feasible:")
-      print(cqm.check_feasible(solution.sample))
       
 cqm = ConstrainedQuadraticModel()
 
@@ -104,54 +64,41 @@ y103=Binary('y103')
 cqm.set_objective(- 700000*x001 - 1400000*x002 - 2100000*x003 - 2800000*x004 - 280000*x011
       - 560000*x012 - 840000*x013 - 1120000*x014 - 1600000*x101 - 3200000*x102
       - 4800000*x103 - 6400000*x104 - 640000*x111 - 1280000*x112 - 1920000*x113
-      - 2560000*x114 + (1000000*x001*x001 + 4000000*x001*x002 + 6000000*x001*x003
-      + 8000000*x001*x004 - 1000000*x001*x101 - 2000000*x001*x102
+      - 2560000*x114 + (1000000*x001*x001 - 1000000*x001*x101 - 2000000*x001*x102
       - 3000000*x001*x103 - 4000000*x001*x104 + 4000000*x002*x002
-      + 12000000*x002*x003 + 16000000*x002*x004 - 2000000*x002*x101
+      - 2000000*x002*x101
       - 4000000*x002*x102 - 6000000*x002*x103 - 8000000*x002*x104
-      + 9000000*x003*x003 + 24000000*x003*x004 - 3000000*x003*x101
+      + 9000000*x003*x003 - 3000000*x003*x101
       - 6000000*x003*x102 - 9000000*x003*x103 - 12000000*x003*x104
       + 16000000*x004*x004 - 4000000*x004*x101 - 8000000*x004*x102
       - 12000000*x004*x103 - 16000000*x004*x104 + 160000*x011*x011
-      + 640000*x011*x012 + 960000*x011*x013 + 1280000*x011*x014
+     
       - 160000*x011*x111 - 320000*x011*x112 - 480000*x011*x113
-      - 640000*x011*x114 + 640000*x012*x012 + 1920000*x012*x013 + 2560000*x012*x014
+      - 640000*x011*x114 + 640000*x012*x012 
       - 320000*x012*x111 - 640000*x012*x112 - 960000*x012*x113
-      - 1280000*x012*x114 + 1440000*x013*x013 + 3840000*x013*x014
+       + 1440000*x013*x013 
       - 480000*x013*x111 - 960000*x013*x112 - 1440000*x013*x113
       - 1920000*x013*x114 + 2560000*x014*x014 - 640000*x014*x111
       - 1280000*x014*x112 - 1920000*x014*x113 - 2560000*x014*x114
-      + 1000000*x101*x101 + 4000000*x101*x102 + 6000000*x101*x103
-      + 8000000*x101*x104 + 4000000*x102*x102 + 12000000*x102*x103
-      + 16000000*x102*x104 + 9000000*x103*x103 + 24000000*x103*x104
-      + 16000000*x104*x104 + 160000*x111*x111 + 640000*x111*x112 + 960000*x111*x113
-      + 1280000*x111*x114 + 640000*x112*x112 + 1920000*x112*x113
-      + 2560000*x112*x114 + 1440000*x113*x113 + 3840000*x113*x114 + 2560000*x114*x114
-      + 200*y000*y000 + 200*y000*y001 - 200*y000*y002 - 400*y000*y003
+      + 1000000*x101*x101 + 4000000*x102*x102 + 9000000*x103*x103
+      + 16000000*x104*x104 + 160000*x111*x111 + 640000*x112*x112 + 1440000*x113*x113 
+      + 2560000*x114*x114
+      + 200*y000*y000
       - 400*y000*y100 - 200*y000*y101 + 200*y000*y102 + 400*y000*y103
-      + 50*y001*y001- 100*y001*y002 - 200*y001*y003 - 200*y001*y100
-      - 100*y001*y101 + 100*y001*y102 + 200*y001*y103 + 50*y002*y002
+      + 50*y001*y001 - 200*y001*y100
+      - 100*y001*y101 + 50*y002*y002
       + 200*y002*y003 + 200*y002*y100 + 100*y002*y101 - 100*y002*y102
       - 200*y002*y103 + 200*y003*y003 + 400*y003*y100 + 200*y003*y101
       - 200*y003*y102 - 400*y003*y103 + 200*y100*y100 + 200*y100*y101
       - 200*y100*y102 - 400*y100*y103 + 50*y101*y101 - 100*y101*y102
       - 200*y101*y103 + 50*y102*y102 + 200*y102*y103 + 200*y103*y103 )/2 + 6100000)
 
-#print("Unconstrained")
-#solveBQM(cqm,False)
-
 cqm.add_constraint(x000 + x001 + x002 + x003 + x004 == 1,'bucket_p_0')
-#cqm.add_constraint(x000 + x001 + x002 + x003 + x004 > 0,'bucket_p_0_0')
-
-
 cqm.add_constraint(x010 + x011 + x012 + x013 + x014 == 1,'bucket_p_1')
 cqm.add_constraint(x100 + x101 + x102 + x103 + x104 == 1,'bucket_p_2')
 cqm.add_constraint(x110 + x111 + x112 + x113 + x114 == 1,'bucket_p_3')
 cqm.add_constraint(y000 + y001 + y002 + y003 == 1       ,'bucket_s_0')
 cqm.add_constraint(y100 + y101 + y102 + y103 == 1       ,'bucket_s_1')
-
-print("Only buckets")
-solveBQM(cqm,False,2000,10)
 
 cqm.add_constraint(500*x001 + 1000*x002 + 1500*x003 + 2000*x004 == 500 ,'power_balance_plants_0')
 cqm.add_constraint(200*x011 + 400*x012 + 600*x013 + 800*x014 == 200    ,'power_balance_plants_1')
@@ -161,19 +108,12 @@ cqm.add_constraint(500*x001 + 1000*x002 + 1500*x003 + 2000*x004
 cqm.add_constraint(500*x101 + 1000*x102 + 1500*x103 + 2000*x104      
                             + 200*x111 + 400*x112 + 600*x113 + 800*x114 == 1600,'power_balance_all_times_1')
 
-
-print("Power Balance")
-solveBQM(cqm,False)
-
 cqm.add_constraint(
 10*y000 + 5*y001 - 5*y002 - 10*y003 - 10*y100 - 5*y101 + 5*y102
                  + 10*y103 >= -20,'transf_min_1_0')       
 
 cqm.add_constraint(10*y000 + 5*y001 - 5*y002 - 10*y003 - 10*y100 - 5*y101 + 5*y102
                  + 10*y103 <= 20,'transf_max_1_0')
-
-print("Transformers")
-solveBQM(cqm,False)
 
 cqm.add_constraint(- 500*x001 - 1000*x002 - 1500*x003 - 2000*x004 - 200*x011
                        - 400*x012 - 600*x013 - 800*x014 - 500*x101 - 1000*x102
@@ -189,24 +129,56 @@ cqm.add_constraint(- 1000*x001 - 2000*x002 - 3000*x003 - 4000*x004
                        -3860,'branch_utilization_1')
 
 
-print("Branch utilisation - full problem")
-solveBQM(cqm,False,2000,10)
+bqm, invert = dimod.cqm_to_bqm(cqm)
+print(cqm)
 #sampleset = dimod.ExactSolver().sample(bqm)
 #print(sampleset)
 
-#samplerHybrid = KerberosSampler().sample(bqm, max_iter=10, convergence=3)
-#print("Hybrid sampler:")
-#solution=samplerHybrid.first
-#print(solution)
-#print("Is feasible:")
-#print(cqm.check_feasible(solution.sample))    
 
-print("Gurobi solver")
-optimizer = GurobiOptimizer(disp=False)
-result = optimizer.solve(cqm)
-print(result)
 
-quit()
+sampler=neal.SimulatedAnnealingSampler()
+sampleset = sampler.sample(bqm, label='Example - CM - Scratch bqm',num_reads=10000)
+
+print(sampleset.first)
+solution=sampleset.first
+
+print("Simulated annealer:")
+print(solution)
+print("Is feasible:")
+print(cqm.check_feasible(solution.sample))
+
+from dwave.system import DWaveSampler, EmbeddingComposite
+qpu = DWaveSampler()
+samplesetQPU = EmbeddingComposite(qpu).sample(bqm,
+                                    return_embedding=True,
+                                    answer_mode="raw",
+                                    num_reads=1000,
+                                    annealing_time=40,
+                                    auto_scale=True #Failing if set to false
+                                    ,chain_strength=1e30
+                                    ) 
+
+                                    
+
+print("QPU annealer:")
+solution=samplesetQPU.first
+print(solution)
+print("Is feasible:")
+print(cqm.check_feasible(solution.sample))                          
+dwave.inspector.show(samplesetQPU)
+
+from hybrid.reference.kerberos import KerberosSampler
+samplerHybrid = KerberosSampler().sample(bqm, max_iter=10, convergence=3)
+print("Hybrid sampler:")
+solution=samplerHybrid.first
+print(solution)
+print("Is feasible:")
+print(cqm.check_feasible(solution.sample))    
+
+#optimizer = GurobiOptimizer(disp=False)
+#result = optimizer.solve(cqm)
+#print(result)
+
 solutions={}
 
 combinations = []
@@ -214,7 +186,7 @@ combinations.append([]) #Add the empty list, for having the original problem
 for r in range(1, len(cqm.constraint_labels) + 1):
     combinations.extend(list(itertools.combinations(cqm.constraint_labels, r)))
 
-exit()
+
 
 # Print the combinations
 for combo in combinations:
