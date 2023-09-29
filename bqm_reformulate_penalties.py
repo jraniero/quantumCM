@@ -206,6 +206,7 @@ def penaltyReformQUBO():
             - 200*y100*y102 - 400*y100*y103 + 50*y101*y101 - 100*y101*y102
             - 200*y101*y103 + 50*y102*y102 + 200*y102*y103 + 200*y103*y103 )/2 + 6100000
             
+            # Penalties are added as quadratic terms in the cost function
             + 16000000*10*(x000 + x001 + x002 + x003 + x004 - 1)*(x000 + x001 + x002 + x003 + x004 - 1) #Bucket_p_0
             + 16000000*10*(x010 + x011 + x012 + x013 + x014 - 1)*(x010 + x011 + x012 + x013 + x014 - 1) #Bucket_p_0
             + 16000000*10*(x100 + x101 + x102 + x103 + x104 - 1)*(x100 + x101 + x102 + x103 + x104 - 1) #Bucket_p_2
