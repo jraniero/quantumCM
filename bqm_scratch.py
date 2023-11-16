@@ -190,7 +190,7 @@ cqm.add_constraint(- 1000*x001 - 2000*x002 - 3000*x003 - 4000*x004
 
 
 print("Branch utilisation - full problem")
-solveBQM(cqm,False,2000,10)
+solveBQM(cqm,True,2000,10)
 #sampleset = dimod.ExactSolver().sample(bqm)
 #print(sampleset)
 

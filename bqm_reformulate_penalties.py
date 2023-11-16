@@ -10,7 +10,7 @@ import pandas as pd
 from copy import deepcopy
 import json
 import datetime
-from dwave.preprocessing import FixVar.iablesComposite
+from dwave.preprocessing import FixVariablesComposite
 import dwave.inspector
 from dwave.system import DWaveSampler, EmbeddingComposite
 from dimod import Binary
