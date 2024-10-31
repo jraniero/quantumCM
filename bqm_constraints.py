@@ -10,53 +10,16 @@ import datetime
 from dwave.preprocessing import FixVariablesComposite
 import dwave.inspector
 from dwave.system import DWaveSampler, EmbeddingComposite
+from benchmark_cqm  import standardCQM, solveBQM, convert_to_serializable
 
+
+standardCQM=standardCQM()
 
 
 
 from hybrid.reference.kerberos import KerberosSampler
 
 from qiskit_optimization.algorithms import GurobiOptimizer
-
-def convert_to_serializable(obj):
-    if isinstance(obj, np.int8):
-        return int(obj)  # Convert int8 to int
-    else:
-        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-
-
-def solveBQM(cqm,inspect=False,num_reads=1000,annealing_time=40):
-      bqm, invert = dimod.cqm_to_bqm(cqm)
-      #print(cqm)
-      qpu = DWaveSampler()
-      samplesetQPU = EmbeddingComposite(qpu).sample(bqm,
-                                          return_embedding=True,
-                                          answer_mode="raw",
-                                          num_reads=num_reads,
-                                          annealing_time=annealing_time,
-                                          auto_scale=True #Failing if set to false
-                                          #,chain_strength=1e30
-                                          ) 
-
-                                          
-
-      print("QPU annealer:")
-      solution=samplesetQPU.first
-      print(solution)
-      print("Is feasible:")
-      print(cqm.check_feasible(solution.sample))                          
-      if inspect:
-            dwave.inspector.show(samplesetQPU)
-
-      sampler=neal.SimulatedAnnealingSampler()
-      sampleset = sampler.sample(bqm, label='Example - CM - Scratch bqm',num_reads=10000)
-
-      solution=sampleset.first
-
-      print("Simulated annealer:")
-      print(solution)
-      print("Is feasible:")
-      print(cqm.check_feasible(solution.sample))
       
 cqm = ConstrainedQuadraticModel()
 
@@ -135,23 +98,24 @@ cqm.set_objective(- 700000*x001 - 1400000*x002 - 2100000*x003 - 2800000*x004 - 2
       - 200*y002*y103 + 200*y003*y003 + 400*y003*y100 + 200*y003*y101
       - 200*y003*y102 - 400*y003*y103 + 200*y100*y100 + 200*y100*y101
       - 200*y100*y102 - 400*y100*y103 + 50*y101*y101 - 100*y101*y102
-      - 200*y101*y103 + 50*y102*y102 + 200*y102*y103 + 200*y103*y103 )/2 + 6100000)
+      - 200*y101*y103 + 50*y102*y102 + 200*y102*y103 + 200*y103*y103 )/2 + 6100000
+      #+(x000*x001+x000*x002+x002*x003+x003*x004+x002*x001+x002*x004+x001*x003+x001*x004)*1e6 #bucket constraints
+      +(x000*x001+x000*x002+x000*x003+x000*x004+x001*x002+x001*x003+x001*x004+x002*x003+x002*x004+x003*x004)*1e7
+      +(x100*x101+x100*x102+x100*x103+x100*x104+x101*x102+x101*x103+x101*x104+x102*x103+x102*x104+x103*x104)*1e7
+      +(x010*x011+x010*x012+x010*x013+x010*x014+x011*x012+x011*x013+x011*x014+x012*x013+x012*x014+x013*x014)*1e7
+      +(x110*x111+x110*x112+x110*x113+x110*x114+x111*x112+x111*x113+x111*x114+x112*x113+x112*x114+x113*x114)*1e7
+      +(y000*y001+y000*y002+y000*y003+y001*y002+y001*y003+y002*y003)*1e7
+      +(y100*y101+y100*y102+y100*y103+y101*y102+y101*y103+y102*y103)*1e7
+
+      )
 
 #print("Unconstrained")
 #solveBQM(cqm,False)
 
-cqm.add_constraint(x000 + x001 + x002 + x003 + x004 == 1,'bucket_p_0')
-#cqm.add_constraint(x000 + x001 + x002 + x003 + x004 > 0,'bucket_p_0_0')
-
-
-cqm.add_constraint(x010 + x011 + x012 + x013 + x014 == 1,'bucket_p_1')
-cqm.add_constraint(x100 + x101 + x102 + x103 + x104 == 1,'bucket_p_2')
-cqm.add_constraint(x110 + x111 + x112 + x113 + x114 == 1,'bucket_p_3')
-cqm.add_constraint(y000 + y001 + y002 + y003 == 1       ,'bucket_s_0')
-cqm.add_constraint(y100 + y101 + y102 + y103 == 1       ,'bucket_s_1')
-
 print("Only buckets")
-#solveBQM(cqm,False,2000,10)
+#solution=solveBQM(cqm,False,2000,10,standardCQM)
+#print("Feasible for standard CQM: {}".format(standardCQM.check_feasible(solution.sample)))
+
 
 cqm.add_constraint(500*x001 + 1000*x002 + 1500*x003 + 2000*x004 == 500 ,'power_balance_plants_0')
 cqm.add_constraint(200*x011 + 400*x012 + 600*x013 + 800*x014 == 200    ,'power_balance_plants_1')
@@ -163,7 +127,7 @@ cqm.add_constraint(500*x101 + 1000*x102 + 1500*x103 + 2000*x104
 
 
 print("Power Balance")
-#solveBQM(cqm,False)
+#solveBQM(cqm,False,2000,10,standardCQM)
 
 cqm.add_constraint(
 10*y000 + 5*y001 - 5*y002 - 10*y003 - 10*y100 - 5*y101 + 5*y102
@@ -173,24 +137,25 @@ cqm.add_constraint(10*y000 + 5*y001 - 5*y002 - 10*y003 - 10*y100 - 5*y101 + 5*y1
                  + 10*y103 <= 20,'transf_max_1_0')
 
 print("Transformers")
-#solveBQM(cqm,False)
+#solveBQM(cqm,True,2000,10,standardCQM)
 
-cqm.add_constraint(- 500*x001 - 1000*x002 - 1500*x003 - 2000*x004 - 200*x011
-                       - 400*x012 - 600*x013 - 800*x014 - 500*x101 - 1000*x102
-                       - 1500*x103 - 2000*x104 - 200*x111 - 400*x112 - 600*x113
-                       - 800*x114 + 10*y000 + 5*y001 - 5*y002 - 10*y003
-                       + 10*y100 + 5*y101 - 5*y102 - 10*y103 <= -2290,'branch_utilization_0')
+cqm.add_constraint(- 100*x001 - 200*x002 - 300*x003 - 400*x004 - 40*x011
+                       - 80*x012 - 120*x013 - 160*x014 - 100*x101 - 200*x102
+                       - 300*x103 - 400*x104 - 40*x111 - 80*x112 - 120*x113
+                       - 160*x114 + 2*y000 + 1*y001 - 1*y002 - 2*y003
+                       + 2*y100 + 1*y101 - 1*y102 - 2*y103 <= -458,'branch_utilization_0')
 
-cqm.add_constraint(- 1000*x001 - 2000*x002 - 3000*x003 - 4000*x004
-                       - 200*x011 - 400*x012 - 600*x013 - 800*x014 - 1000*x101
-                       - 2000*x102 - 3000*x103 - 4000*x104 - 200*x111 - 400*x112
-                       - 600*x113 - 800*x114 + 40*y000 + 20*y001 - 20*y002
-                       - 40*y003 + 40*y100 + 20*y101 - 20*y102 - 40*y103 <= 
-                       -3860,'branch_utilization_1')
+cqm.add_constraint(- 100*x001 - 200*x002 - 300*x003 - 400*x004
+                       - 20*x011 - 40*x012 - 60*x013 - 80*x014 - 100*x101
+                       - 200*x102 - 300*x103 - 400*x104 - 20*x111 - 40*x112
+                       - 60*x113 - 80*x114 + 4*y000 + 2*y001 - 2*y002
+                       - 4*y003 + 4*y100 + 2*y101 - 2*y102 - 4*y103 <= 
+                       -386,'branch_utilization_1')
 
 
 print("Branch utilisation - full problem")
-solveBQM(cqm,False,2000,10)
+#solveBQM(cqm,False,2000,10,standardCQM)
+solveBQM(cqm,True,2000,10,standardCQM,1e10)
 #sampleset = dimod.ExactSolver().sample(bqm)
 #print(sampleset)
 

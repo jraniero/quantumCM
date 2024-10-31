@@ -14,7 +14,7 @@ import sys
 from docplex.mp.model import Model
 from qiskit_optimization.translators import from_docplex_mp
 from qiskit_optimization.converters import QuadraticProgramToQubo
-from qiskit.algorithms import NumPyMinimumEigensolver
+#from qiskit.algorithms import NumPyMinimumEigensolver
 from qiskit_optimization.algorithms import MinimumEigenOptimizer
 from qiskit_optimization.algorithms import GurobiOptimizer
 #from qiskit.optimization import QuadraticProgram

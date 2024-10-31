@@ -27,6 +27,7 @@ def convert_to_serializable(obj):
 def solveBQM(cqm,inspect=False,num_reads=1000,annealing_time=40,lagrange_multiplier=10):
       bqm, invert = dimod.cqm_to_bqm(cqm,lagrange_multiplier=lagrange_multiplier)
       #print(cqm)
+      #qpu = DWaveSampler(solver=dict({"name": "Advantage2_prototype2.5"}))
       qpu = DWaveSampler()
       samplesetQPU = EmbeddingComposite(qpu).sample(bqm,
                                           return_embedding=True,
